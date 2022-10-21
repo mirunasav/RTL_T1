@@ -11,16 +11,26 @@ void handleResponse ( char * response, int serverSocket)
 {
     char inBuffer[BUFFER_LENGTH];
     if(strcmp (response, "quit") == 0)
-        exit(0);
+    exit(0);
+
     if(strstr(response, "PID_OK") == response)
     {
         for(int i = 1; i<= 5; i++)
         {
-            readBuffer(serverSocket, &response);
-            printf("%s", response);
+            readBuffer(serverSocket, &inBuffer);
+            printf("%s\n", inBuffer);
             fflush(stdout);
         }
+        return;
     }
+    if(strstr(response, "PID_NOT_OK") == response)
+    {
+        printf("PID NOT OK!\n");
+        return;
+    }
+    printf("%s", response);
+
+
 }
 void client_loop(int server_socket)
 {
@@ -34,7 +44,6 @@ void client_loop(int server_socket)
         writeBuffer(server_socket, outBuffer);
         readBuffer(server_socket, &inBuffer);
         handleResponse(inBuffer, server_socket);
-        printf("%s", inBuffer);
         fflush(stdout);
 
     }

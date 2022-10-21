@@ -237,6 +237,7 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
         if(pidStatusFile == NULL)
         {
             printf("eroare la deschis pidStatusFile ul\n");
+            writeBuffer(writeFifo, "PID_NOT_OK");
         }
         writeBuffer(writeFifo, "PID_OK");
         while(!feof (pidStatusFile))
