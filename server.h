@@ -7,24 +7,28 @@
 
 
 #include <sys/stat.h>
+#include <unistd.h>
+#include <cstdlib>
+#include <netinet/in.h>
+#include <cstdio>
+
 #include "functions.h"
 #include "utmp.h"
 
 #include <fcntl.h>
 
-int init_server()
-{
-   // char server_message [BUFFER_LENGTH] = "You have reached the server!\n";
+int init_server() {
+    // char server_message [BUFFER_LENGTH] = "You have reached the server!\n";
 
     int s = socket(AF_INET, SOCK_STREAM, 0);
 
     int toggle = 1;
-    setsockopt (
+    setsockopt(
             s,
             SOL_SOCKET,
             SO_REUSEADDR,
-            & toggle,
-            sizeof ( toggle )
+            &toggle,
+            sizeof(toggle)
     );
 
     //define the server address
@@ -34,17 +38,17 @@ int init_server()
     server_address.sin_addr.s_addr = htonl(INADDR_ANY);
 
     //bind the socket to our specified IP and port
-    bind(s, (struct sockaddr * ) &server_address, sizeof(server_address));
+    bind(s, (struct sockaddr *) &server_address, sizeof(server_address));
     printf("Serverul a pornit\n");
     return s;
 
 }
-void handleLoginRequest( int client_socket, char * request, char * response, UserInfo& userInfo)
+
+void handleLoginRequest(int client_socket, char *request, char *response, UserInfo &userInfo)
 //cu pipe
 {
-    if(userInfo.isLoggedIn)
-    {
-        writeBuffer(client_socket,"You are already logged in!\n");
+    if (userInfo.isLoggedIn) {
+        writeBuffer(client_socket, "You are already logged in!\n");
         return;
     }
 
@@ -52,26 +56,26 @@ void handleLoginRequest( int client_socket, char * request, char * response, Use
     int childToParent[2];
     char messageFromChild[BUFFER_LENGTH];
 
-    if(pipe(parentToChild) < 0 )
+    if (pipe(parentToChild) < 0)
         printError("Eroare la creare pipe\n");
-    if (pipe(childToParent ) < 0)
+    if (pipe(childToParent) < 0)
         printError("Eroare la creare pipe\n");
 
     pid_t childPid = fork();
 
-    if (childPid < 0 )
-        printError("eroare la fork!\n");
-    if(childPid != 0 ) //in parinte
+    if (childPid < 0)
+        printError("Eroare la fork!\n");
+    if (childPid != 0) //in parinte
     {
         close(childToParent[WRITE]);
 
         int status;
         waitpid(childPid, &status, 0);
-        if(!WIFEXITED(status))
+        if (!WIFEXITED(status))
             printf("eroare la copilul care a facut login\n");
         readBuffer(childToParent[READ], &messageFromChild);
 
-        if(strcmp(messageFromChild , "yes" ) == 0 ) {
+        if (strcmp(messageFromChild, "yes") == 0) {
             userInfo.isLoggedIn = true;
 
             fflush(stdout);
@@ -79,114 +83,98 @@ void handleLoginRequest( int client_socket, char * request, char * response, Use
             strcpy(response, "You are logged in! \n Possible commands: \n logout \n quit \n"
                              " get-logged-users \n get-proc-info : pid\n");
 
-            writeBuffer(client_socket,response);
+            writeBuffer(client_socket, response);
 
             memset(response, 0, BUFFER_LENGTH);
 
-            fflush (stdout);
+            fflush(stdout);
         }
 
-        if(strcmp(messageFromChild, "no") == 0)
-            writeBuffer(client_socket,"Login failed!\n");
-        if(strcmp(messageFromChild, "already logged in") == 0)
-            writeBuffer(client_socket,"You are already logged in!\n");
+        if (strcmp(messageFromChild, "no") == 0)
+            writeBuffer(client_socket, "Login failed!\n");
+        if (strcmp(messageFromChild, "already logged in") == 0)
+            writeBuffer(client_socket, "You are already logged in!\n");
         close(childToParent[READ]);
 
 
-    }
-    else //in copil
+    } else //in copil
     {
         close(childToParent[READ]);
 
         switch (loginFunction(request, userInfo)) {
             case true:
-                if(userInfo.isLoggedIn == true )
-                {
+                if (userInfo.isLoggedIn) {
                     writeBuffer(childToParent[WRITE], "already logged in");
                     close(childToParent[WRITE]);
                     exit(0);
-                }
-                else //daca nu era logat deja
+                } else //daca nu era logat deja
                 {
                     printf("logarea s-a realizat cu succes!\n");
                     if (writeBuffer(childToParent[WRITE], "yes"))
                         exit(1);
                     close(childToParent[WRITE]);
-
                     exit(0);
                 }
-                break;
             case false:
                 printf("logarea a esuat\n");
-                if(writeBuffer(childToParent[WRITE], "no") < 0 )
+                if (writeBuffer(childToParent[WRITE], "no") < 0)
                     exit(1);
                 close(childToParent[WRITE]);
                 exit(0);
-
         }
-
     }
-
 }
-void handleLogoutRequest ( int client_socket, char const* request, char * response, UserInfo& user)
+
+void handleLogoutRequest(int client_socket, char const *request, char *response, UserInfo &user)
 //cu pipe
 {
     int parentChildPipe[2];
-    if( pipe (parentChildPipe ) == -1)
-    {
+    if (pipe(parentChildPipe) == -1) {
         printf("eroare la pipe in handleLogoutRequest!\n");
     }
 
     pid_t childPid = fork();
-    if (childPid < 0 )
-    {
+    if (childPid < 0) {
         printf("eroare la fork() in handleLogoutRequest!\n");
     }
-    if(childPid ==0 ) //in copil
+    if (childPid == 0) //in copil
     {
         close(parentChildPipe[READ]);
 
         char childMessage[BUFFER_LENGTH];
-        if(user.isLoggedIn)
+        if (user.isLoggedIn)
             writeBuffer(parentChildPipe[WRITE], "LOGOUT");
         else
             writeBuffer(parentChildPipe[WRITE], "NOT LOGGED IN YET");
 
         close(parentChildPipe[WRITE]);
         exit(0);
-    }
-    else
-    {
+    } else {
         close(parentChildPipe[WRITE]);
 
         int status;
         char messageFromChild[BUFFER_LENGTH];
         waitpid(childPid, &status, 0);
-        if(!WIFEXITED(status))
+        if (!WIFEXITED(status))
             printf("eroare la copilul care a facut login\n");
         readBuffer(parentChildPipe[READ], &messageFromChild);
-        if(strcmp(messageFromChild , "LOGOUT" ) == 0 ) {
+        if (strcmp(messageFromChild, "LOGOUT") == 0) {
             user.isLoggedIn = false;
-            strcpy(response,"You are logged out!\n");
+            strcpy(response, "You are logged out!\n");
             writeBuffer(client_socket, response);
             fflush(stdout);
         }
 
-        if(strcmp(messageFromChild, "NOT LOGGED IN YET") == 0)
-        {
-            strcpy(response,"You cannot logout!\n");
-            writeBuffer(client_socket,response);
+        if (strcmp(messageFromChild, "NOT LOGGED IN YET") == 0) {
+            strcpy(response, "You cannot logout!\n");
+            writeBuffer(client_socket, response);
             fflush(stdout);
         }
         close(parentChildPipe[READ]);
     }
-
-
-
 }
 
-void  handleQuitRequest (int client_socket, char* request,char*  response,UserInfo& user)
-{
+void handleQuitRequest(int client_socket, char *request, char *response, UserInfo &user) {
     writeBuffer(client_socket, "quit");
 }
 void handleGetInfoRequest(int client_socket, char* request, char* response,UserInfo& user)
@@ -302,62 +290,69 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
 
 
 }
-void handleRequest(int client_socket, char * request,  char * response, UserInfo&  user)
-{
+
+int handleRequest(int client_socket, char *request, char *response, UserInfo &user) {
+
 //    char command[BUFFER_LENGTH];
 //    memset(command, 0, BUFFER_LENGTH);
 //    separateCommand(request, command);
 //    printf("command este %s si request este %s", command, request);
-    if(!user.isLoggedIn)
-    {
-        if (strstr(request, "login") == request)
-        {
-            handleLoginRequest(client_socket, request, response, user);
-        }
-        else
-        {
-            writeBuffer(client_socket, "You need to login first!\n");
-        }
+    if (strstr(request, "quit")) {
+        handleQuitRequest(client_socket, request, response, user);
+        return 499; // client closed request
     }
-    else //if the client is already logged in
+
+    if (!user.isLoggedIn) {
+        if (strstr(request, "login") == request) {
+            handleLoginRequest(client_socket, request, response, user);
+            return 200; // accepted
+        } else {
+            writeBuffer(client_socket, "You need to login first!\n");
+            return 401; // unauthorized
+        }
+    } else //if the client is already logged in
     {
-        if (strstr(request, "login : ") == request )
-        {
+        if (strstr(request, "login : ") == request ) {
             writeBuffer(client_socket, "You are already logged in!\n");
+            return 405; // method not allowed
         }
-        if(strstr(request, "logout") == request )
-        {
-            handleLogoutRequest(client_socket,request, response, user);
-        }
-        if(strstr(request, "quit") == request )
-        {
-            handleQuitRequest(client_socket, request, response, user);
+        if (strstr(request, "logout") == request ) {
+            handleLogoutRequest(client_socket, request, response, user);
+            return 200; // accepted
         }
         if(strstr(request,"get-proc-info : " )== request )
         {
             handleGetInfoRequest(client_socket, request, response, user );
         }
-
     }
-
-
-
 }
 
-void server_loop(int client_socket)
-{
-    char clientRequest[BUFFER_LENGTH], serverResponse[BUFFER_LENGTH],
-            consoleBuffer[BUFFER_LENGTH];
-    UserInfo userInfo;
+int server_loop(int s) {
 
-    while(1)
-    {
-        readBuffer(client_socket,&clientRequest );
-        handleRequest(client_socket,clientRequest, serverResponse, userInfo);
-        fflush (stdout);
+    while(1) {
+        listen(s, 5); //nr din dreapta nu e asa relevant pt ca in acest caz lucram cu un singur client
 
+        struct sockaddr_in client_address;
+        socklen_t length = sizeof(struct sockaddr_in);
+
+        int client_socket = accept(s, (sockaddr *) &client_address, &length);
+
+        if (client_socket < 0)
+            printf("nu  s a realizat ok conexiunea");
+
+
+        char clientRequest[BUFFER_LENGTH], serverResponse[BUFFER_LENGTH],
+                consoleBuffer[BUFFER_LENGTH];
+        UserInfo userInfo;
+
+        int status_code = 0;
+
+        while (status_code != 499) {
+            readBuffer(client_socket, &clientRequest);
+            status_code = handleRequest(client_socket, clientRequest, serverResponse, userInfo);
+            fflush(stdout);
+        }
     }
-
 }
 //get-proc-info : pid
 

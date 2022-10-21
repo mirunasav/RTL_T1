@@ -8,7 +8,9 @@
 #define BUFFER_LENGTH 256
 #define READ 0
 #define WRITE 1
+#define FIFO_NAME "file"
+#define USERS_FILE "../username_passwords.txt"
+
 #define parentWritesToChild "file"
 #define childWritesToParent "file2"
-
 #endif //TEMA1_DEFINITIONS_H
