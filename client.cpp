@@ -13,9 +13,9 @@
 
 int main() {
     char inBuffer[BUFFER_LENGTH], outBuffer[BUFFER_LENGTH],
-        consoleBuffer[BUFFER_LENGTH];
+            consoleBuffer[BUFFER_LENGTH];
     //cream socketul
-    int s = socket(AF_INET, SOCK_STREAM,0);
+    int s = socket(AF_INET, SOCK_STREAM, 0);
 
     //specificam adresa socketului
     struct sockaddr_in server_address;
@@ -24,10 +24,10 @@ int main() {
     server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 
-     int connection_status =  connect(s, (struct sockaddr *) &server_address, sizeof(server_address));
-    if(connection_status == -1 )
-    {
-       printf("Eroare la conexiunea cu serverul\n");
+    int connection_status = connect(s, (struct sockaddr *) &server_address, sizeof(server_address));
+    if (connection_status == -1) {
+        printf("Eroare la conexiunea cu serverul\n");
+        exit(-1);
     }
 
     printf("Welcome! Please login: \n");
