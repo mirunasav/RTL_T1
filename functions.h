@@ -14,6 +14,15 @@ struct UserInfo{
     char password[BUFFER_LENGTH];
 };
 
+struct ProcessInfo
+{
+    char processName[BUFFER_LENGTH];
+    char processState[BUFFER_LENGTH];
+    char PPID[BUFFER_LENGTH];
+    char processUID[BUFFER_LENGTH];
+    char processVMSIZE[BUFFER_LENGTH];
+};
+
 int readBuffer(int fileDescriptor, void *pBuf)
 {
     size_t bufferLength = 0;
@@ -57,7 +66,22 @@ int readCommand(void * pBuf)
    return 1;
 
 }
+void separateCommand(char * clientRequest, char *command)
+{
 
+    command = strtok (clientRequest, " ");
+
+    clientRequest = strtok ( NULL,  " ");
+
+}
+char * separateUserInfoParameter(char *clientRequest)
+{
+    char * p = strstr(clientRequest, " : ");
+    char * parameter = nullptr;
+    p+=3;
+    parameter = strtok(p ," ");
+    return parameter;
+}
 bool loginFunction(char *pBuf, UserInfo& user)
 {
     //taiem bucata cu "login : "

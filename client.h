@@ -7,10 +7,20 @@
 
 #include <cstdio>
 #include "functions.h"
-void handleResponse ( char * response)
+void handleResponse ( char * response, int serverSocket)
 {
+    char inBuffer[BUFFER_LENGTH];
     if(strcmp (response, "quit") == 0)
         exit(0);
+    if(strstr(response, "PID_OK") == response)
+    {
+        for(int i = 1; i<= 5; i++)
+        {
+            readBuffer(serverSocket, &response);
+            printf("%s", response);
+            fflush(stdout);
+        }
+    }
 }
 void client_loop(int server_socket)
 {
@@ -23,7 +33,7 @@ void client_loop(int server_socket)
         strcpy(outBuffer, consoleBuffer);
         writeBuffer(server_socket, outBuffer);
         readBuffer(server_socket, &inBuffer);
-        handleResponse(inBuffer);
+        handleResponse(inBuffer, server_socket);
         printf("%s", inBuffer);
         fflush(stdout);
 
