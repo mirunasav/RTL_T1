@@ -1,19 +1,14 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
-#include <cstring>
-#include "functions.h"
 #include "definitions.h"
 #include "client.h"
 
 int main() {
-    char inBuffer[BUFFER_LENGTH], outBuffer[BUFFER_LENGTH],
-            consoleBuffer[BUFFER_LENGTH];
+
     //cream socketul
     int s = socket(AF_INET, SOCK_STREAM, 0);
 

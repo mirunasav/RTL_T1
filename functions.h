@@ -7,6 +7,8 @@
 
 #include "definitions.h"
 #include <cstring>
+#include <unistd.h>
+#include <cstdio>
 
 
 struct UserInfo {

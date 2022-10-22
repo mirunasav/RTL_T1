@@ -16,6 +16,12 @@
 #include "utmp.h"
 
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <cstdio>
+#include <sys/wait.h>
+#include <cstdlib>
+#include <ctime>
 
 int init_server() {
     // char server_message [BUFFER_LENGTH] = "You have reached the server!\n";
@@ -177,6 +183,7 @@ void handleLogoutRequest(int client_socket, char const *request, char *response,
 void handleQuitRequest(int client_socket, char *request, char *response, UserInfo &user) {
     writeBuffer(client_socket, "quit");
 }
+
 void handleGetInfoRequest(int client_socket, char* request, char* response,UserInfo& user)
 //cu fifo
 {
@@ -225,6 +232,8 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
         if(pidStatusFile == NULL)
         {
             printf("eroare la deschis pidStatusFile ul\n");
+            writeBuffer(writeFifo, "PID_NOT_OK");
+            exit(1);
         }
         writeBuffer(writeFifo, "PID_OK");
         while(!feof (pidStatusFile))
@@ -278,14 +287,87 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
         char messageFromChild[BUFFER_LENGTH];
         readBuffer(readFifo,&messageFromChild );
         writeBuffer(client_socket, messageFromChild);
-        for(int i = 1; i <= 5; i++)
+
+        if ( strstr (messageFromChild,"PID_OK") ==  messageFromChild)
         {
-            readBuffer(readFifo, response);
-            writeBuffer(client_socket, response);
+            for (int i = 1; i <= 5; i++)
+            {
+                readBuffer(readFifo, response);
+                writeBuffer(client_socket, response);
+            }
         }
-        close(readFifo);
-        waitpid(childPid, NULL, 0);
+        else
+            writeBuffer(client_socket, response);
+            close(readFifo);
+            waitpid(childPid, NULL, 0);
     }
+}
+
+void handleGetLoggedUsersRequest(int client_socket, char* request, char* response, UserInfo& user)
+//cu socketpair
+{
+    int parentChildSocket[2];
+    if( socketpair(AF_UNIX, SOCK_STREAM, 0 , parentChildSocket) )
+        printf("eroare la creare socketpair\n");
+
+    pid_t childPid = fork();
+
+    if(childPid == -1 )
+    {
+        printf("eroare la fork in handleGetLoggedUsersRequest\n");
+    }
+
+    if(childPid == 0 )
+    {
+        close(parentChildSocket[1]);
+        struct utmp *login;
+        char username[BUFFER_LENGTH], hostname[BUFFER_LENGTH], timestamp[BUFFER_LENGTH];
+        time_t loginTime;
+        setutent();
+        login = getutent();
+
+        bool user_ok = false;
+
+
+        while(login)
+        {
+            if(login -> ut_type == USER_PROCESS)
+            {
+                if (! user_ok )
+                {
+                    writeBuffer(parentChildSocket[0], "USER OK");
+                    user_ok = true;
+                }
+                strcpy(username , login -> ut_user);
+                writeBuffer(parentChildSocket[0], username);
+                strcpy(hostname, login -> ut_host);
+                writeBuffer(parentChildSocket[0], hostname);
+                loginTime = login -> ut_tv.tv_sec;
+                strcpy(timestamp, asctime(localtime(&loginTime)));
+                writeBuffer(parentChildSocket[0],timestamp);
+
+            }
+            login = getutent();
+        }
+        endutent();
+        close(parentChildSocket[0]);
+    }
+    if(childPid)
+    {
+        close(parentChildSocket[0]);
+        char messageFromChild[BUFFER_LENGTH];
+        readBuffer(parentChildSocket[1], messageFromChild );
+        if(strstr(messageFromChild, "USER OK") == messageFromChild)
+        {
+            writeBuffer(client_socket, "USER OK");
+            for (int i = 1; i <= 3; i++)
+            {
+                readBuffer(parentChildSocket[1], response);
+                writeBuffer(client_socket, response);
+            }
+        }
+        close(parentChildSocket[1]);
+        waitpid(childPid, NULL, 0);
 
 
 
@@ -323,7 +405,14 @@ int handleRequest(int client_socket, char *request, char *response, UserInfo &us
         if(strstr(request,"get-proc-info : " )== request )
         {
             handleGetInfoRequest(client_socket, request, response, user );
+            return 200;
         }
+        if(strstr (request, "get-logged-users") == request)
+        {
+            handleGetLoggedUsersRequest(client_socket, request, response, user);
+            return 200;
+        }
+
     }
 }
 
