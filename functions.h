@@ -17,18 +17,14 @@ struct UserInfo {
     char password[BUFFER_LENGTH];
 };
 
-struct ProcessInfo
+void reset(void * pBuf)
 {
-    char processName[BUFFER_LENGTH];
-    char processState[BUFFER_LENGTH];
-    char PPID[BUFFER_LENGTH];
-    char processUID[BUFFER_LENGTH];
-    char processVMSIZE[BUFFER_LENGTH];
-};
+    memset(pBuf, 0, BUFFER_LENGTH);
+}
 
 int readBuffer(int fileDescriptor, void *pBuf) {
     size_t bufferLength = 0;
-    memset(pBuf, 0, BUFFER_LENGTH);
+    reset(pBuf);
 
     if (read(fileDescriptor, &bufferLength, sizeof(size_t)) < 0)
         return 0;
@@ -54,7 +50,7 @@ int writeBuffer(int fileDescriptor, const char *pBuf) {
 }
 
 int readCommand(void *pBuf) {
-    memset(pBuf, 0, BUFFER_LENGTH);
+    reset(pBuf);
     if (read(0, pBuf, BUFFER_LENGTH) < 0)
         return 0;
     //facem abstract de enterul de la final

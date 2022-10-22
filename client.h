@@ -7,11 +7,14 @@
 
 #include <cstdio>
 #include "functions.h"
-void handleResponse ( char * response, int serverSocket)
+void handleResponse ( char *  response, int serverSocket)
 {
     char inBuffer[BUFFER_LENGTH];
     if(strcmp (response, "quit") == 0)
-    exit(0);
+    {
+        printf("You quit\n");
+        exit(0);
+    }
 
     if(strstr(response, "PID_OK") == response)
     {
@@ -25,7 +28,16 @@ void handleResponse ( char * response, int serverSocket)
     }
     if(strstr(response, "PID_NOT_OK") == response)
     {
-        printf("PID NOT OK!\n");
+        printf("%s\n", response);
+        reset(response);
+        fflush(stdout);
+        return;
+    }
+    if(strstr(response, "USER NOT OK") == response)
+    {
+        printf("%s\n", response);
+        reset(response);
+        fflush(stdout);
         return;
     }
     if(strstr(response, "USER OK") == response)
@@ -38,7 +50,9 @@ void handleResponse ( char * response, int serverSocket)
         }
         return;
     }
-    printf("%s", response);
+
+    printf("%s", response);//in caz de login / unknown command,
+    // printeaza fix raspunsul primit de la server, adica textul asta
     fflush(stdout);
 
 
@@ -57,7 +71,6 @@ void client_loop(int server_socket)
         writeBuffer(server_socket, outBuffer);
         readBuffer(server_socket, &inBuffer);
         handleResponse(inBuffer, server_socket);
-
         fflush(stdout);
 
     }
