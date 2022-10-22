@@ -184,141 +184,121 @@ void handleQuitRequest(int client_socket, char *request, char *response, UserInf
     writeBuffer(client_socket, "quit");
 }
 
-void handleGetInfoRequest(int client_socket, char* request, char* response,UserInfo& user)
+void handleGetInfoRequest(int client_socket, char *request, char *response, UserInfo &user)
 //cu fifo
 {
     ProcessInfo process;
     char parameter[BUFFER_LENGTH];
     memset(parameter, 0, BUFFER_LENGTH);
-    strcpy (parameter , separateUserInfoParameter(request));
+    strcpy(parameter, separateUserInfoParameter(request));
     //printf("parametrul este %s", parameter);
 
-    if(mkfifo(parentWritesToChild, 0666) == -1)
-    {
-       unlink(parentWritesToChild);
-       if( mkfifo(parentWritesToChild, 0666) == -1 )
-           printf("Eroare la creare fifo!\n");
+    if (mkfifo(parentWritesToChild, 0666) == -1) {
+        unlink(parentWritesToChild);
+        if (mkfifo(parentWritesToChild, 0666) == -1)
+            printf("Eroare la creare fifo!\n");
     }
 
-    if(mkfifo(childWritesToParent, 0666) == -1)
-    {
+    if (mkfifo(childWritesToParent, 0666) == -1) {
         unlink(childWritesToParent);
-        if( mkfifo(childWritesToParent, 0666) == -1 )
+        if (mkfifo(childWritesToParent, 0666) == -1)
             printf("Eroare la creare fifo!\n");
     }
 
     pid_t childPid = fork();
-    if(childPid == -1)
-    {
+    if (childPid == -1) {
         printf("eroare la fork in getInfoRequest\n");
 
     }
 
-    if(childPid == 0)
-    {
+    if (childPid == 0) {
         int writeFifo = open(childWritesToParent, O_WRONLY);
-        if(writeFifo == -1)
-        {
+        if (writeFifo == -1) {
             exit(-1);
         }
 
-        char pathName [BUFFER_LENGTH];
+        char pathName[BUFFER_LENGTH];
         char lineFromFile[BUFFER_LENGTH];
         pid_t processID = strtol(parameter, NULL, 10);
         sprintf(pathName, "/proc/%d/status", processID);
 
         FILE *pidStatusFile = fopen(pathName, "r");
 
-        if(pidStatusFile == NULL)
-        {
+        if (pidStatusFile == NULL) {
             printf("eroare la deschis pidStatusFile ul\n");
             writeBuffer(writeFifo, "PID_NOT_OK");
             exit(1);
         }
         writeBuffer(writeFifo, "PID_OK");
-        while(!feof (pidStatusFile))
-        {
+        while (!feof(pidStatusFile)) {
             fgets(lineFromFile, BUFFER_LENGTH, pidStatusFile);
             char *pEnd;
-            pEnd = strchr((char*)lineFromFile, '\n');
-            if(pEnd != nullptr)
+            pEnd = strchr((char *) lineFromFile, '\n');
+            if (pEnd != nullptr)
                 *pEnd = '\0';
-            if(strstr(lineFromFile, "Name") == lineFromFile )
-            {
+            if (strstr(lineFromFile, "Name") == lineFromFile) {
                 strcpy(process.processName, lineFromFile);
-                writeBuffer(writeFifo,process.processName );
+                writeBuffer(writeFifo, process.processName);
             }
-            if(strstr(lineFromFile, "PPid") == lineFromFile )
-            {
+            if (strstr(lineFromFile, "PPid") == lineFromFile) {
                 strcpy(process.PPID, lineFromFile);
-                writeBuffer(writeFifo,process.PPID );
+                writeBuffer(writeFifo, process.PPID);
             }
-            if(strstr(lineFromFile, "State") == lineFromFile ){
+            if (strstr(lineFromFile, "State") == lineFromFile) {
                 strcpy(process.processState, lineFromFile);
-                writeBuffer(writeFifo,process.processState );
+                writeBuffer(writeFifo, process.processState);
             }
-            if(strstr(lineFromFile, "Uid") == lineFromFile )
-            {
+            if (strstr(lineFromFile, "Uid") == lineFromFile) {
                 strcpy(process.processUID, lineFromFile);
-                writeBuffer(writeFifo,process.processUID);
+                writeBuffer(writeFifo, process.processUID);
             }
-            if(strstr(lineFromFile, "VmSize") == lineFromFile )
-            {
+            if (strstr(lineFromFile, "VmSize") == lineFromFile) {
                 strcpy(process.processVMSIZE, lineFromFile);
-                writeBuffer(writeFifo,process.processVMSIZE );
+                writeBuffer(writeFifo, process.processVMSIZE);
             }
         }
         fclose(pidStatusFile);
         close(writeFifo);
         exit(0);
 
-    }
+    } else {
 
-    else
-    {
+        int readFifo = open(childWritesToParent, O_RDONLY);
 
-        int readFifo = open (childWritesToParent , O_RDONLY);
-
-        if(readFifo ==  -1)
-        {
+        if (readFifo == -1) {
             printf("eroare la deschidere fifo\n");
         }
 
         char messageFromChild[BUFFER_LENGTH];
-        readBuffer(readFifo,&messageFromChild );
+        readBuffer(readFifo, &messageFromChild);
         writeBuffer(client_socket, messageFromChild);
 
-        if ( strstr (messageFromChild,"PID_OK") ==  messageFromChild)
-        {
-            for (int i = 1; i <= 5; i++)
-            {
+        if (strstr(messageFromChild, "PID_OK") == messageFromChild) {
+            for (int i = 1; i <= 5; i++) {
                 readBuffer(readFifo, response);
                 writeBuffer(client_socket, response);
             }
-        }
-        else
+        } else
             writeBuffer(client_socket, response);
-            close(readFifo);
-            waitpid(childPid, NULL, 0);
+        close(readFifo);
+        waitpid(childPid, NULL, 0);
     }
 }
 
-void handleGetLoggedUsersRequest(int client_socket, char* request, char* response, UserInfo& user)
+void handleGetLoggedUsersRequest(int client_socket, char *request, char *response, UserInfo &user)
 //cu socketpair
 {
     int parentChildSocket[2];
-    if( socketpair(AF_UNIX, SOCK_STREAM, 0 , parentChildSocket) )
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, parentChildSocket))
         printf("eroare la creare socketpair\n");
 
     pid_t childPid = fork();
 
-    if(childPid == -1 )
-    {
+    if (childPid == -1) {
         printf("eroare la fork in handleGetLoggedUsersRequest\n");
     }
 
-    if(childPid == 0 )
-    {
+    if (childPid == 0) {
         close(parentChildSocket[1]);
         struct utmp *login;
         char username[BUFFER_LENGTH], hostname[BUFFER_LENGTH], timestamp[BUFFER_LENGTH];
@@ -329,22 +309,19 @@ void handleGetLoggedUsersRequest(int client_socket, char* request, char* respons
         bool user_ok = false;
 
 
-        while(login)
-        {
-            if(login -> ut_type == USER_PROCESS)
-            {
-                if (! user_ok )
-                {
+        while (login) {
+            if (login->ut_type == USER_PROCESS) {
+                if (!user_ok) {
                     writeBuffer(parentChildSocket[0], "USER OK");
                     user_ok = true;
                 }
-                strcpy(username , login -> ut_user);
+                strcpy(username, login->ut_user);
                 writeBuffer(parentChildSocket[0], username);
-                strcpy(hostname, login -> ut_host);
+                strcpy(hostname, login->ut_host);
                 writeBuffer(parentChildSocket[0], hostname);
-                loginTime = login -> ut_tv.tv_sec;
+                loginTime = login->ut_tv.tv_sec;
                 strcpy(timestamp, asctime(localtime(&loginTime)));
-                writeBuffer(parentChildSocket[0],timestamp);
+                writeBuffer(parentChildSocket[0], timestamp);
 
             }
             login = getutent();
@@ -352,16 +329,13 @@ void handleGetLoggedUsersRequest(int client_socket, char* request, char* respons
         endutent();
         close(parentChildSocket[0]);
     }
-    if(childPid)
-    {
+    if (childPid) {
         close(parentChildSocket[0]);
         char messageFromChild[BUFFER_LENGTH];
-        readBuffer(parentChildSocket[1], messageFromChild );
-        if(strstr(messageFromChild, "USER OK") == messageFromChild)
-        {
+        readBuffer(parentChildSocket[1], messageFromChild);
+        if (strstr(messageFromChild, "USER OK") == messageFromChild) {
             writeBuffer(client_socket, "USER OK");
-            for (int i = 1; i <= 3; i++)
-            {
+            for (int i = 1; i <= 3; i++) {
                 readBuffer(parentChildSocket[1], response);
                 writeBuffer(client_socket, response);
             }
@@ -369,16 +343,11 @@ void handleGetLoggedUsersRequest(int client_socket, char* request, char* respons
         close(parentChildSocket[1]);
         waitpid(childPid, NULL, 0);
 
-
-
+    }
 }
 
 int handleRequest(int client_socket, char *request, char *response, UserInfo &user) {
 
-//    char command[BUFFER_LENGTH];
-//    memset(command, 0, BUFFER_LENGTH);
-//    separateCommand(request, command);
-//    printf("command este %s si request este %s", command, request);
     if (strstr(request, "quit")) {
         handleQuitRequest(client_socket, request, response, user);
         return 499; // client closed request
@@ -394,21 +363,19 @@ int handleRequest(int client_socket, char *request, char *response, UserInfo &us
         }
     } else //if the client is already logged in
     {
-        if (strstr(request, "login : ") == request ) {
+        if (strstr(request, "login : ") == request) {
             writeBuffer(client_socket, "You are already logged in!\n");
             return 405; // method not allowed
         }
-        if (strstr(request, "logout") == request ) {
+        if (strstr(request, "logout") == request) {
             handleLogoutRequest(client_socket, request, response, user);
             return 200; // accepted
         }
-        if(strstr(request,"get-proc-info : " )== request )
-        {
-            handleGetInfoRequest(client_socket, request, response, user );
+        if (strstr(request, "get-proc-info : ") == request) {
+            handleGetInfoRequest(client_socket, request, response, user);
             return 200;
         }
-        if(strstr (request, "get-logged-users") == request)
-        {
+        if (strstr(request, "get-logged-users") == request) {
             handleGetLoggedUsersRequest(client_socket, request, response, user);
             return 200;
         }
@@ -443,6 +410,5 @@ int server_loop(int s) {
         }
     }
 }
-//get-proc-info : pid
 
 #endif //TEMA1_SERVER_H
