@@ -28,10 +28,22 @@ void handleResponse ( char * response, int serverSocket)
         printf("PID NOT OK!\n");
         return;
     }
+    if(strstr(response, "USER OK") == response)
+    {
+        for(int i = 1; i <= 3; i++)
+        {
+            readBuffer(serverSocket, &inBuffer);
+            printf("%s\n", inBuffer);
+            fflush(stdout);
+        }
+        return;
+    }
     printf("%s", response);
+    fflush(stdout);
 
 
 }
+
 void client_loop(int server_socket)
 {
     char inBuffer[BUFFER_LENGTH], outBuffer[BUFFER_LENGTH],
@@ -41,13 +53,14 @@ void client_loop(int server_socket)
         if(!readCommand(&consoleBuffer))
             printf("eroare la citirea comenzii in client\n");
         strcpy(outBuffer, consoleBuffer);
+
         writeBuffer(server_socket, outBuffer);
         readBuffer(server_socket, &inBuffer);
         handleResponse(inBuffer, server_socket);
+
         fflush(stdout);
 
     }
 }
 
-///CUM FAC SA PORNESC IAR CLIENTUL DUPA CE AM DAT QUIT?
 #endif //TEMA1_CLIENT_H

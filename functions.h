@@ -6,6 +6,8 @@
 #define TEMA1_FUNCTIONS_H
 #include "definitions.h"
 #include <cstring>
+#include <unistd.h>
+#include <cstdio>
 
 
 struct UserInfo{

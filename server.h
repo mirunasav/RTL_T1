@@ -11,6 +11,12 @@
 #include "utmp.h"
 
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <cstdio>
+#include <sys/wait.h>
+#include <cstdlib>
+#include <ctime>
 
 int init_server()
 {
@@ -39,6 +45,7 @@ int init_server()
     return s;
 
 }
+
 void handleLoginRequest( int client_socket, char * request, char * response, UserInfo& userInfo)
 //cu pipe
 {
@@ -128,6 +135,7 @@ void handleLoginRequest( int client_socket, char * request, char * response, Use
     }
 
 }
+
 void handleLogoutRequest ( int client_socket, char const* request, char * response, UserInfo& user)
 //cu pipe
 {
@@ -189,6 +197,7 @@ void  handleQuitRequest (int client_socket, char* request,char*  response,UserIn
 {
     writeBuffer(client_socket, "quit");
 }
+
 void handleGetInfoRequest(int client_socket, char* request, char* response,UserInfo& user)
 //cu fifo
 {
@@ -238,6 +247,7 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
         {
             printf("eroare la deschis pidStatusFile ul\n");
             writeBuffer(writeFifo, "PID_NOT_OK");
+            exit(1);
         }
         writeBuffer(writeFifo, "PID_OK");
         while(!feof (pidStatusFile))
@@ -291,33 +301,115 @@ void handleGetInfoRequest(int client_socket, char* request, char* response,UserI
         char messageFromChild[BUFFER_LENGTH];
         readBuffer(readFifo,&messageFromChild );
         writeBuffer(client_socket, messageFromChild);
-        for(int i = 1; i <= 5; i++)
+
+        if ( strstr (messageFromChild,"PID_OK") ==  messageFromChild)
         {
-            readBuffer(readFifo, response);
-            writeBuffer(client_socket, response);
+            for (int i = 1; i <= 5; i++)
+            {
+                readBuffer(readFifo, response);
+                writeBuffer(client_socket, response);
+            }
         }
-        close(readFifo);
-        waitpid(childPid, NULL, 0);
+        else
+            writeBuffer(client_socket, response);
+            close(readFifo);
+            waitpid(childPid, NULL, 0);
+
+
     }
 
 
 
 }
-void handleRequest(int client_socket, char * request,  char * response, UserInfo&  user)
+
+void handleGetLoggedUsersRequest(int client_socket, char* request, char* response, UserInfo& user)
+//cu socketpair
 {
-//    char command[BUFFER_LENGTH];
-//    memset(command, 0, BUFFER_LENGTH);
-//    separateCommand(request, command);
-//    printf("command este %s si request este %s", command, request);
+    int parentChildSocket[2];
+    if( socketpair(AF_UNIX, SOCK_STREAM, 0 , parentChildSocket) )
+        printf("eroare la creare socketpair\n");
+
+    pid_t childPid = fork();
+
+    if(childPid == -1 )
+    {
+        printf("eroare la fork in handleGetLoggedUsersRequest\n");
+    }
+
+    if(childPid == 0 )
+    {
+        close(parentChildSocket[1]);
+        struct utmp *login;
+        char username[BUFFER_LENGTH], hostname[BUFFER_LENGTH], timestamp[BUFFER_LENGTH];
+        time_t loginTime;
+        setutent();
+        login = getutent();
+
+        bool user_ok = false;
+
+
+        while(login)
+        {
+            if(login -> ut_type == USER_PROCESS)
+            {
+                if (! user_ok )
+                {
+                    writeBuffer(parentChildSocket[0], "USER OK");
+                    user_ok = true;
+                }
+                strcpy(username , login -> ut_user);
+                writeBuffer(parentChildSocket[0], username);
+                strcpy(hostname, login -> ut_host);
+                writeBuffer(parentChildSocket[0], hostname);
+                loginTime = login -> ut_tv.tv_sec;
+                strcpy(timestamp, asctime(localtime(&loginTime)));
+                writeBuffer(parentChildSocket[0],timestamp);
+
+            }
+            login = getutent();
+        }
+        endutent();
+        close(parentChildSocket[0]);
+    }
+    if(childPid)
+    {
+        close(parentChildSocket[0]);
+        char messageFromChild[BUFFER_LENGTH];
+        readBuffer(parentChildSocket[1], messageFromChild );
+        if(strstr(messageFromChild, "USER OK") == messageFromChild)
+        {
+            writeBuffer(client_socket, "USER OK");
+            for (int i = 1; i <= 3; i++)
+            {
+                readBuffer(parentChildSocket[1], response);
+                writeBuffer(client_socket, response);
+            }
+        }
+        close(parentChildSocket[1]);
+        waitpid(childPid, NULL, 0);
+
+
+    }
+}
+int handleRequest(int client_socket, char * request,  char * response, UserInfo&  user)
+{
+
+    if(strstr(request, "quit") == request)
+    {
+        handleQuitRequest(client_socket, request, response, user);
+        return 499;//client closed request
+    }
     if(!user.isLoggedIn)
     {
         if (strstr(request, "login") == request)
         {
             handleLoginRequest(client_socket, request, response, user);
+            return 200; //accepted
         }
         else
         {
             writeBuffer(client_socket, "You need to login first!\n");
+            return 401;//unauthorized
         }
     }
     else //if the client is already logged in
@@ -325,18 +417,23 @@ void handleRequest(int client_socket, char * request,  char * response, UserInfo
         if (strstr(request, "login : ") == request )
         {
             writeBuffer(client_socket, "You are already logged in!\n");
+            return 405;//method not allowed
         }
         if(strstr(request, "logout") == request )
         {
             handleLogoutRequest(client_socket,request, response, user);
+            return 200;//accepted
         }
-        if(strstr(request, "quit") == request )
-        {
-            handleQuitRequest(client_socket, request, response, user);
-        }
+
         if(strstr(request,"get-proc-info : " )== request )
         {
             handleGetInfoRequest(client_socket, request, response, user );
+            return 200;
+        }
+        if(strstr (request, "get-logged-users") == request)
+        {
+            handleGetLoggedUsersRequest(client_socket, request, response, user);
+            return 200;
         }
 
     }
@@ -345,7 +442,7 @@ void handleRequest(int client_socket, char * request,  char * response, UserInfo
 
 }
 
-void server_loop(int client_socket)
+void server_loop(int s)
 {
     char clientRequest[BUFFER_LENGTH], serverResponse[BUFFER_LENGTH],
             consoleBuffer[BUFFER_LENGTH];
@@ -353,9 +450,30 @@ void server_loop(int client_socket)
 
     while(1)
     {
-        readBuffer(client_socket,&clientRequest );
-        handleRequest(client_socket,clientRequest, serverResponse, userInfo);
-        fflush (stdout);
+        listen(s, 5);//nr din dreapta nu e asa relevant pt ca in acest caz lucram cu un singur client
+
+        struct sockaddr_in client_address;
+        socklen_t length = sizeof(sockaddr_in);
+
+        int client_socket = accept (s, (sockaddr *) &client_address, &length);
+
+        if(client_socket < 0)
+        {
+            printf("Nu s-a realizat ok conexiunea\n");
+        }
+
+        char clientRequest[BUFFER_LENGTH], serverResponse[BUFFER_LENGTH];
+        UserInfo userInfo;
+
+        int status_code = 0;
+
+        while(status_code != 499)
+        {
+            readBuffer(client_socket,&clientRequest );
+            handleRequest(client_socket,clientRequest, serverResponse, userInfo);
+            fflush (stdout);
+        }
+
 
     }
 
